@@ -13,13 +13,22 @@ typedef void (*bst_lst_free_func_t)(void *ptr);
 
 typedef struct bst_lst {
     bst_arr_t elements;
-    bst_lst_free_func_t free_func;
     size_t length;
+    bst_lst_free_func_t free_func;
 } bst_lst_t;
 
 
 BST_API(bst_lst_t*)
 bst_lst_new(size_t item_size, size_t length, bst_lst_free_func_t free_func);
+
+BST_API(bst_lst_t*)
+bst_lst_init(bst_lst_t *self,
+             size_t item_size,
+             size_t length,
+             bst_lst_free_func_t free_func);
+
+BST_API(void)
+bst_lst_deinit(bst_lst_t *self);
 
 BST_API(void)
 bst_lst_free(bst_lst_t *self);

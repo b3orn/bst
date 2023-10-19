@@ -6,14 +6,26 @@
 BST_API(bst_lst_t*)
 bst_lst_new(size_t item_size, size_t length, bst_lst_free_func_t free_func) {
     bst_lst_t *self;
-    if (!item_size || !(self = malloc(sizeof(*self))))
+    if (!(self = malloc(sizeof(*self))))
         return NULL;
 
-    if (!bst_arr_init(&self->elements, item_size, length)) {
+    if (!bst_lst_init(self, item_size, length, free_func)) {
         free(self);
 
         return NULL;
     }
+
+    return self;
+}
+
+
+BST_API(bst_lst_t*)
+bst_lst_init(bst_lst_t *self,
+             size_t item_size,
+             size_t length,
+             bst_lst_free_func_t free_func) {
+    if (!self || !bst_arr_init(&self->elements, item_size, length))
+        return NULL;
 
     self->free_func = free_func;
     self->length = 0;
@@ -23,7 +35,7 @@ bst_lst_new(size_t item_size, size_t length, bst_lst_free_func_t free_func) {
 
 
 BST_API(void)
-bst_lst_free(bst_lst_t *self) {
+bst_lst_deinit(bst_lst_t *self) {
     size_t i;
     if (!self)
         return;
@@ -35,6 +47,12 @@ bst_lst_free(bst_lst_t *self) {
     }
 
     bst_arr_deinit(&self->elements);
+}
+
+
+BST_API(void)
+bst_lst_free(bst_lst_t *self) {
+    bst_lst_deinit(self);
     free(self);
 }
 

@@ -1,18 +1,16 @@
 #include "bst/bst.h"
+#define BST_DEBUG_MEMORY
 #include "bst/debug.h"
 
 
 BST_API(bst_str_t*)
 bst_str_new(size_t length, const char *buffer) {
     bst_str_t *self;
-    if (buffer && !length)
-        length = strlen(buffer);
-
-    if (!(self = bst_lst_new(1, length + 1, NULL)))
+    if (!(self = malloc(sizeof(*self))))
         return NULL;
 
-    if (buffer && bst_str_write(self, 0, length, buffer) != length) {
-        bst_str_free(self);
+    if (!bst_str_init(self, length, buffer)) {
+        free(self);
 
         return NULL;
     }
@@ -65,6 +63,33 @@ bst_str_from_file(FILE *file, size_t length) {
     }
 
     return self;
+}
+
+
+BST_API(bst_str_t*)
+bst_str_init(bst_str_t *self, size_t length, const char *buffer) {
+    if (!self)
+        return NULL;
+
+    if (buffer && !length)
+        length = strlen(buffer);
+
+    if (!bst_lst_init(self, 1, length + 1, NULL))
+        return NULL;
+
+    if (buffer && bst_str_write(self, 0, length, buffer) != length) {
+        bst_str_deinit(self);
+
+        return NULL;
+    }
+
+    return self;
+}
+
+
+BST_API(void)
+bst_str_deinit(bst_str_t *self) {
+    bst_lst_deinit(self);
 }
 
 
@@ -221,4 +246,22 @@ bst_str_trim_right(bst_str_t *self) {
     buffer[self->length] = 0;
 
     return self;
+}
+
+
+BST_API(bool)
+bst_str_eq(bst_str_t *self, size_t length, bst_str_t *other) {
+    return bst_str_eqc(self, length, bst_str_ptr(other, 0));
+}
+
+
+BST_API(bool)
+bst_str_eqc(bst_str_t *self, size_t length, char *buffer) {
+    if (!self || !buffer)
+        return false;
+
+    if (!length && (length = bst_str_length(self)) != strlen(buffer))
+        return false;
+
+    return !strncmp(bst_str_ptr(self, 0), buffer, length);
 }
