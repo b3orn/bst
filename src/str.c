@@ -2,43 +2,22 @@
 #include "bst/debug.h"
 
 
-static size_t
-bst_str_calculate_chunk_size(size_t size);
-
-
 BST_API(bst_str_t*)
 bst_str_new(size_t length, const char *buffer) {
-    size_t size;
     bst_str_t *self;
-
-    if (!(self = malloc(sizeof(*self))))
-        return NULL;
-
-    size = 0;
-
     if (buffer && !length)
         length = strlen(buffer);
 
-    if (length)
-        size = length + 1;
+    if (!(self = bst_lst_new(1, length + 1, NULL)))
+        return NULL;
 
-    self->size = bst_str_calculate_chunk_size(size);
-    self->length = 0;
+    if (buffer && bst_str_write(self, 0, length, buffer) != length) {
+        bst_str_free(self);
 
-    if (!(self->data = malloc(self->size)))
-        goto error;
-
-    self->data[0] = 0;
-
-    if (buffer && bst_str_write(self, buffer, 0, length) != length)
-        goto error;
+        return NULL;
+    }
 
     return self;
-
-error:
-    bst_str_free(self);
-
-    return NULL;
 }
 
 
@@ -58,12 +37,13 @@ bst_str_from_path(const char *path) {
 
 
 BST_API(bst_str_t*)
-bst_str_from_file(FILE *file, int length) {
+bst_str_from_file(FILE *file, size_t length) {
     bst_str_t *self;
     long offset, size;
-    if (!file || length < 0 || (offset = ftell(file)) == -1)
+    if (!file || (offset = ftell(file)) == -1)
         return NULL;
 
+    /* determine length from current file position if no length is provided */
     if (!length) {
         if (fseek(file, 0, SEEK_END) || (size = ftell(file)) == -1)
             return NULL;
@@ -71,13 +51,14 @@ bst_str_from_file(FILE *file, int length) {
         if (fseek(file, offset, SEEK_SET))
             return NULL;
 
-        length = (int)size;
+        length = (size_t)size;
     }
 
-    if (!(self = bst_str_new((size_t)length, NULL)))
+    if (!(self = bst_str_new(length, NULL)))
         return NULL;
 
-    if (!fgets(self->data, length + 1, file)) {
+    /* fgets reads one less than the provided length and writes null byte */
+    if (!fgets(bst_str_ptr(self, 0), (int)(length + 1), file)) {
         bst_str_free(self);
 
         return NULL;
@@ -89,20 +70,20 @@ bst_str_from_file(FILE *file, int length) {
 
 BST_API(void)
 bst_str_free(bst_str_t *self) {
-    free(self->data);
-    free(self);
+    bst_lst_free(self);
 }
 
 
 BST_API(bst_str_t*)
 bst_str_copy(bst_str_t *self, size_t offset, size_t length) {
-    if (!self || offset >= self->length || offset + length > self->length)
+    char *ptr;
+    if (!self || !(ptr = bst_str_ptr(self, offset)))
         return NULL;
 
-    if (!length)
-        length = self->length - offset;
+    if (!length || offset + length >= self->length - 1)
+        length = self->length - 1 - offset;
 
-    return bst_str_new(length, &self->data[offset]);
+    return bst_str_new(length, bst_str_ptr(self, offset));
 }
 
 
@@ -111,8 +92,9 @@ bst_str_clear(bst_str_t *self) {
     if (!self)
         return;
 
+    bst_arr_clear(&self->elements, 0, self->length);
+
     self->length = 0;
-    self->data[0] = 0;
 }
 
 
@@ -121,7 +103,7 @@ bst_str_ptr(bst_str_t *self, size_t offset) {
     if (!self || offset >= self->length)
         return NULL;
 
-    return &self->data[offset];
+    return (char*)bst_lst_get(self, offset);
 }
 
 
@@ -135,28 +117,30 @@ bst_str_length(bst_str_t *self) {
 
 
 BST_API(size_t)
-bst_str_write(bst_str_t *self, const char *buffer, size_t offset, size_t length) {
-    size_t size;
-    char *data;
+bst_str_write(bst_str_t *self,
+              size_t offset,
+              size_t length,
+              const char *buffer) {
+    char c;
     if (!self || !buffer)
         return 0;
 
     if (!length)
         length = strlen(buffer);
 
-    if (self->length + length + 1 > self->size) {
-        size = bst_str_calculate_chunk_size(self->length + length + 1);
-        if (!(data = realloc(self->data, size)))
-            return 0;
-
-        self->data = data;
-        self->size = size;
+    length = bst_arr_insert(&self->elements,
+                            self->length,
+                            length,
+                            &buffer[offset]);
+    if (!length) {
+        return 0;
     }
 
-    strncpy(&self->data[self->length], &buffer[offset], length);
-
+    c = 0;
     self->length += length;
-    self->data[self->length] = 0;
+
+    if (!bst_arr_insert(&self->elements, self->length, 1, &c))
+        return 0;
 
     return length;
 }
@@ -165,12 +149,13 @@ bst_str_write(bst_str_t *self, const char *buffer, size_t offset, size_t length)
 BST_API(size_t)
 bst_str_line_offset(bst_str_t *self, size_t offset) {
     size_t n;
-    if (!self || offset >= self->length)
+    char *buffer;
+    if (!self || !(buffer = bst_str_ptr(self, offset)))
         return 0;
 
-    for (n = offset; n < self->length; ++n) {
-        if (self->data[n] == '\n') {
-            return n + 1;
+    for (n = 0; n < self->length - offset; ++n) {
+        if (buffer[n] == '\n') {
+            return offset + n + 1;
         }
     }
 
@@ -197,10 +182,11 @@ bst_str_trim(bst_str_t *self) {
 BST_API(bst_str_t*)
 bst_str_trim_left(bst_str_t *self) {
     size_t offset, n, m;
-    if (!self)
+    char *buffer;
+    if (!self || !(buffer = bst_str_ptr(self, 0)))
         return NULL;
 
-    for (n = 0; n < self->length && isspace((int)self->data[n]); ++n);
+    for (n = 0; n < self->length && isspace((int)buffer[n]); ++n);
 
     offset = n;
 
@@ -210,10 +196,10 @@ bst_str_trim_left(bst_str_t *self) {
     self->length -= offset;
 
     for (n = 0, m = offset; n < self->length; ++n, ++m) {
-        self->data[n] = self->data[m];
+        buffer[n] = buffer[m];
     }
 
-    self->data[self->length] = 0;
+    buffer[self->length] = 0;
 
     return self;
 }
@@ -222,34 +208,17 @@ bst_str_trim_left(bst_str_t *self) {
 BST_API(bst_str_t*)
 bst_str_trim_right(bst_str_t *self) {
     size_t n;
-    if (!self || !self->length)
+    char *buffer;
+    if (!self || !self->length || !(buffer = bst_str_ptr(self, 0)))
         return self;
 
     for (n = 1; n < self->length; ++n) {
-        if (!isspace((int)self->data[self->length - n]))
+        if (!isspace((int)buffer[self->length - n]))
             break;
     }
 
     self->length -= n - 1;
-    self->data[self->length] = 0;
+    buffer[self->length] = 0;
 
     return self;
-}
-
-
-/* internal */
-
-static size_t
-bst_str_calculate_chunk_size(size_t size) {
-    size_t n;
-
-    if (!size)
-        return BST_STR_DEFAULT_SIZE;
-
-    n = size / BST_STR_DEFAULT_SIZE;
-
-    if (size % BST_STR_DEFAULT_SIZE)
-        ++n;
-
-    return n * BST_STR_DEFAULT_SIZE;
 }

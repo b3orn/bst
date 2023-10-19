@@ -103,15 +103,17 @@ bst_arr_clear(bst_arr_t *self, size_t offset, size_t count) {
 
 
 BST_API(size_t)
-bst_arr_insert(bst_arr_t *self, size_t index, size_t count, void *ptr) {
+bst_arr_insert(bst_arr_t *self, size_t index, size_t count, const void *ptr) {
     if (!self)
         return 0;
 
-    if (index >= self->length && !bst_arr_resize(self, self->length + count))
-        return 0;
+    if (index + count >= self->length) {
+        if (!bst_arr_resize(self, self->length + count))
+            return 0;
+    }
 
     memmove(&self->data[index * self->item_size],
-            (uint8_t*)ptr,
+            (const uint8_t*)ptr,
             count * self->item_size);
 
     return count;

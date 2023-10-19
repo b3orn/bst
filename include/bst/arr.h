@@ -66,7 +66,7 @@ bst_arr_clear(bst_arr_t *self, size_t offset, size_t count);
  * insert count item_size items starting at index
  */
 BST_API(size_t)
-bst_arr_insert(bst_arr_t *self, size_t index, size_t count, void *ptr);
+bst_arr_insert(bst_arr_t *self, size_t index, size_t count, const void *ptr);
 
 /*
  * 
@@ -77,6 +77,10 @@ bst_arr_remove(bst_arr_t *self, size_t index);
 BST_API(void*)
 bst_arr_get(bst_arr_t *self, size_t index);
 
+/*
+ * resizes the array
+ * returns either the new total size or 0 in case of an error
+ */
 BST_API(size_t)
 bst_arr_resize(bst_arr_t *self, size_t length);
 
