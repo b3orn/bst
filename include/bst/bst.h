@@ -23,6 +23,7 @@ extern "C" {
 #include "utils.h"
 #include "version.h"
 #include "arr.h"
+#include "lst.h"
 
 #ifdef __cplusplus
 }
