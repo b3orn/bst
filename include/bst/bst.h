@@ -26,7 +26,8 @@ extern "C" {
 #include "lst.h"
 #include "str.h"
 #include "dct.h"
-#include "vec.h"
+#include "vecf.h"
+#include "vecd.h"
 
 #ifdef __cplusplus
 }

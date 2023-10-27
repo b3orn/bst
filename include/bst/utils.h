@@ -12,6 +12,4 @@
 
 #define BST_UNUSED(NAME) ((void)(NAME))
 
-#define BST_NAN (nan(""))
-
 #endif
