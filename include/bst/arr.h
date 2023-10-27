@@ -3,6 +3,7 @@
  *
  * resizeable array
  *
+ * - added elements are copied
  * - pointers to elements of the array can only be considered valid until the
  *   array is resized or a new element is inserted
  * - if you put pointers to something on the heap in the array it's your
@@ -13,24 +14,24 @@
 #ifndef BST_ARR_H
 #define BST_ARR_H
 
-#define BST_ARR_DEFAULT_LENGTH 16
+#define BST_ARR_DEFAULT_CAPACITY 16
 
 
 typedef struct bst_arr {
-    size_t item_size;
-    size_t length;
     uint8_t *data;
+    size_t capacity;
+    size_t item_size;
 } bst_arr_t;
 
 
 /*
- * allocates an array of length number of item_size items
+ * allocates an array of `capacity` number of `item_size` items
  */
 BST_API(bst_arr_t*)
-bst_arr_new(size_t item_size, size_t length);
+bst_arr_new(size_t capacity, size_t item_size);
 
 BST_API(bst_arr_t*)
-bst_arr_init(bst_arr_t *self, size_t item_size, size_t length);
+bst_arr_init(bst_arr_t *self, size_t capacity, size_t item_size);
 
 BST_API(void)
 bst_arr_deinit(bst_arr_t *self);
@@ -39,16 +40,16 @@ BST_API(void)
 bst_arr_free(bst_arr_t *self);
 
 BST_API(void*)
-bst_arr_ptr(bst_arr_t *self, size_t offset);
+bst_arr_ptr(bst_arr_t *self, size_t index);
 
 /*
- * returns allocated number of elements
+ * returns allocated number of elements, may be larger than what was specified
  */
 BST_API(size_t)
-bst_arr_length(bst_arr_t *self);
+bst_arr_capacity(bst_arr_t *self);
 
 /*
- * returns total allocated size = length * item_size
+ * returns total allocated size = capacity * item_size
  */
 BST_API(size_t)
 bst_arr_size(bst_arr_t *self);
@@ -57,10 +58,10 @@ BST_API(size_t)
 bst_arr_item_size(bst_arr_t *self);
 
 /*
- * clear count item_size items starting at offset
+ * clear count item_size items starting at index
  */
 BST_API(void)
-bst_arr_clear(bst_arr_t *self, size_t offset, size_t count);
+bst_arr_clear(bst_arr_t *self, size_t index, size_t count);
 
 /*
  * insert count item_size items starting at index
@@ -74,14 +75,11 @@ bst_arr_insert(bst_arr_t *self, size_t index, size_t count, const void *ptr);
 BST_API(void)
 bst_arr_remove(bst_arr_t *self, size_t index);
 
-BST_API(void*)
-bst_arr_get(bst_arr_t *self, size_t index);
-
 /*
  * resizes the array
  * returns either the new total size or 0 in case of an error
  */
 BST_API(size_t)
-bst_arr_resize(bst_arr_t *self, size_t length);
+bst_arr_resize(bst_arr_t *self, size_t capacity);
 
 #endif

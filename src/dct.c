@@ -1,12 +1,5 @@
 #include "bst/bst.h"
-#define BST_DEBUG_MEMORY
 #include "bst/debug.h"
-
-
-typedef struct bst_dct_kv {
-    bst_str_t key;
-    void *value;
-} bst_dct_kv_t;
 
 
 static size_t
@@ -18,27 +11,40 @@ bst_dct_should_grow(bst_dct_t *self);
 static bool
 bst_dct_grow(bst_dct_t *self);
 
+static size_t
+bst_dct_bucket_index(bst_lst_t *bucket, char *key);
+
 static void
 bst_dct_kv_free(void *ptr);
 
 
 BST_API(bst_dct_t*)
-bst_dct_new(size_t size, bst_dct_free_func_t free_func) {
-    size_t i;
-    bst_lst_t *bucket;
+bst_dct_new(size_t capacity, bst_dct_free_func_t free_func) {
     bst_dct_t *self;
     if (!(self = malloc(sizeof(*self))))
         return NULL;
 
-    if (!bst_arr_init(&self->elements, sizeof(bst_lst_t), size)) {
+    if (!bst_dct_init(self, capacity, free_func)) {
         free(self);
 
         return NULL;
     }
 
-    for (i = 0; i < bst_arr_length(&self->elements); ++i) {
+    return self;
+}
+
+
+BST_API(bst_dct_t*)
+bst_dct_init(bst_dct_t *self, size_t capacity, bst_dct_free_func_t free_func) {
+    size_t i;
+    bst_lst_t *bucket;
+    if (!self || !bst_arr_init(&self->elements, capacity, sizeof(bst_lst_t)))
+        return NULL;
+
+    capacity = bst_arr_capacity(&self->elements);
+    for (i = 0; i < capacity; ++i) {
         bucket = bst_arr_ptr(&self->elements, i);
-        if (!bst_lst_init(bucket, sizeof(bst_dct_kv_t), 0, bst_dct_kv_free))
+        if (!bst_lst_init(bucket, 0, sizeof(bst_dct_kv_t), bst_dct_kv_free))
             goto error;
     }
 
@@ -48,27 +54,31 @@ bst_dct_new(size_t size, bst_dct_free_func_t free_func) {
     return self;
 
 error:
-    for (size = i, i = 0; i < size; ++i) {
+    for (capacity = i, i = 0; i < capacity; ++i) {
         bst_lst_deinit(bst_arr_ptr(&self->elements, i));
     }
+
+    bst_arr_deinit(&self->elements);
 
     return NULL;
 }
 
 
 BST_API(void)
-bst_dct_free(bst_dct_t *self) {
-    size_t i, j;
+bst_dct_deinit(bst_dct_t *self) {
+    size_t capacity, length, i, j;
     bst_lst_t *entries;
     bst_dct_kv_t *kv;
     if (!self)
         return;
 
-    for (i = 0; i < bst_arr_length(&self->elements); ++i) {
-        if (!(entries = bst_arr_get(&self->elements, i)))
+    capacity = bst_arr_capacity(&self->elements);
+    for (i = 0; i < capacity; ++i) {
+        if (!(entries = bst_arr_ptr(&self->elements, i)))
             continue;
 
-        for (j = 0; j < bst_lst_length(entries); ++j) {
+        length = bst_lst_length(entries);
+        for (j = 0; j < length; ++j) {
             if (!(kv = bst_lst_get(entries, j)))
                 continue;
 
@@ -80,6 +90,12 @@ bst_dct_free(bst_dct_t *self) {
     }
 
     bst_arr_deinit(&self->elements);
+}
+
+
+BST_API(void)
+bst_dct_free(bst_dct_t *self) {
+    bst_dct_deinit(self);
     free(self);
 }
 
@@ -94,7 +110,13 @@ bst_dct_count(bst_dct_t *self) {
 
 
 BST_API(void*)
-bst_dct_set(bst_dct_t *self, char *key, void *value) {
+bst_dct_set(bst_dct_t *self, bst_str_t *key, void *value) {
+    return bst_dct_setc(self, bst_str_ptr(key, 0), value);
+}
+
+
+BST_API(void*)
+bst_dct_setc(bst_dct_t *self, char *key, void *value) {
     size_t index;
     bst_lst_t *bucket;
     bst_dct_kv_t *kv, kvn;
@@ -104,23 +126,15 @@ bst_dct_set(bst_dct_t *self, char *key, void *value) {
     if (bst_dct_should_grow(self))
         bst_dct_grow(self);
 
-    index = bst_dct_hash(bst_arr_length(&self->elements), key);
-    bucket = bst_arr_get(&self->elements, index);
+    index = bst_dct_hash(bst_arr_capacity(&self->elements), key);
+    bucket = bst_arr_ptr(&self->elements, index);
 
-    printf("%zu: %s\n", index, key);
+    if ((index = bst_dct_bucket_index(bucket, key)) != SIZE_MAX) {
+        kv = bst_lst_get(bucket, index);
 
-    for (index = 0; index < bst_lst_length(bucket); ++index) {
-        if (!(kv = bst_lst_get(bucket, index)))
-            return NULL;
+        kv->value = value;
 
-        if (bst_str_eqc(&kv->key, 0, key)) {
-            if (self->free_func && kv->value)
-                self->free_func(kv->value);
-
-            kv->value = value;
-
-            return value;
-        }
+        return value;
     }
 
     if (!(bst_str_init(&kvn.key, 0, key)))
@@ -141,55 +155,100 @@ bst_dct_set(bst_dct_t *self, char *key, void *value) {
 
 
 BST_API(void*)
-bst_dct_get(bst_dct_t *self, char *key) {
+bst_dct_get(bst_dct_t *self, bst_str_t *key) {
+    return bst_dct_getc(self, bst_str_ptr(key, 0));
+}
+
+
+BST_API(void*)
+bst_dct_getc(bst_dct_t *self, char *key) {
     size_t index;
     bst_lst_t *bucket;
-    bst_dct_kv_t *kv;
     if (!self || !key)
         return NULL;
 
-    index = bst_dct_hash(bst_arr_length(&self->elements), key);
-    bucket = bst_arr_get(&self->elements, index);
+    index = bst_dct_hash(bst_arr_capacity(&self->elements), key);
+    bucket = bst_arr_ptr(&self->elements, index);
 
-    for (index = 0; index < bst_lst_length(bucket); ++index) {
-        if (!(kv = bst_lst_get(bucket, index)))
-            return NULL;
+    if ((index = bst_dct_bucket_index(bucket, key)) == SIZE_MAX)
+        return NULL;
 
-        if (bst_str_eqc(&kv->key, 0, key)) {
-            return kv->value;
-        }
-    }
-
-    return NULL;
+    return ((bst_dct_kv_t*)bst_lst_get(bucket, index))->value;
 }
 
 
 BST_API(void)
-bst_dct_del(bst_dct_t *self, char *key) {
+bst_dct_del(bst_dct_t *self, bst_str_t *key) {
+    bst_dct_delc(self, bst_str_ptr(key, 0));
+}
+
+
+BST_API(void)
+bst_dct_delc(bst_dct_t *self, char *key) {
     size_t index;
     bst_lst_t *bucket;
     bst_dct_kv_t *kv;
     if (!self || !key)
         return;
 
-    index = bst_dct_hash(bst_arr_length(&self->elements), key);
-    bucket = bst_arr_get(&self->elements, index);
+    index = bst_dct_hash(bst_arr_capacity(&self->elements), key);
+    bucket = bst_arr_ptr(&self->elements, index);
 
-    for (index = 0; index < bst_lst_length(bucket); ++index) {
-        if (!(kv = bst_lst_get(bucket, index)))
-            return;
+    if ((index = bst_dct_bucket_index(bucket, key)) == SIZE_MAX)
+        return;
 
-        if (bst_str_eqc(&kv->key, 0, key)) {
-            if (self->free_func && kv->value)
-                self->free_func(kv->value);
+    kv = bst_lst_get(bucket, index);
 
-            bst_lst_remove(bucket, index);
+    if (self->free_func && kv->value)
+        self->free_func(kv->value);
 
-            --self->count;
+    bst_lst_remove(bucket, index);
 
-            return;
-        }
+    --self->count;
+}
+
+
+BST_API(bst_dct_kv_t*)
+bst_dct_iter(bst_dct_t *self) {
+    size_t capacity, i;
+    bst_lst_t *bucket;
+    if (!self)
+        return NULL;
+
+    capacity = bst_arr_capacity(&self->elements);
+    for (i = 0; i < capacity; ++i) {
+        bucket = bst_arr_ptr(&self->elements, i);
+        if (bst_lst_length(bucket))
+            return bst_lst_get(bucket, 0);
     }
+
+    return NULL;
+}
+
+
+BST_API(bst_dct_kv_t*)
+bst_dct_next(bst_dct_t *self, bst_dct_kv_t *kv) {
+    size_t capacity, i, bucket_index, key_index;
+    bst_lst_t *bucket;
+    if (!self || !kv)
+        return NULL;
+
+    bucket_index = bst_dct_hash(bst_arr_capacity(&self->elements),
+                                bst_str_ptr(&kv->key, 0));
+    bucket = bst_arr_ptr(&self->elements, bucket_index);
+    key_index = bst_dct_bucket_index(bucket, bst_str_ptr(&kv->key, 0));
+
+    if (key_index + 1 < bst_lst_length(bucket))
+        return bst_lst_get(bucket, key_index + 1);
+
+    capacity = bst_arr_capacity(&self->elements);
+    for (i = bucket_index + 1; i < capacity; ++i) {
+        bucket = bst_arr_ptr(&self->elements, i);
+        if (bst_lst_length(bucket))
+            return bst_lst_get(bucket, 0);
+    }
+
+    return NULL;
 }
 
 
@@ -212,7 +271,7 @@ bst_dct_hash(size_t size, char *key) {
 
 static bool
 bst_dct_should_grow(bst_dct_t *self) {
-    return self->count > bst_arr_length(&self->elements);
+    return self->count > bst_arr_capacity(&self->elements);
 }
 
 
@@ -221,6 +280,24 @@ bst_dct_grow(bst_dct_t *self) {
     BST_UNUSED(self);
 
     return false;
+}
+
+
+static size_t
+bst_dct_bucket_index(bst_lst_t *bucket, char *key) {
+    size_t i;
+    bst_dct_kv_t *kv;
+
+    for (i = 0; i < bst_lst_length(bucket); ++i) {
+        if (!(kv = bst_lst_get(bucket, i)))
+            return SIZE_MAX;
+
+        if (bst_str_eqc(&kv->key, 0, key)) {
+            return i;
+        }
+    }
+
+    return SIZE_MAX;
 }
 
 

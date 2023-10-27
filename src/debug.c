@@ -113,12 +113,12 @@ bst_debug_free(char *filename, size_t line, void *ptr) {
 
     memcpy(&x, (size_t*)ptr2 + 1, sizeof(size_t));
 
-    if (x != ~0)
+    if (x != ~(size_t)0)
         under = ", LOWER BOUND VIOLATED";
 
     memcpy(&x, (size_t*)(ptr2 + size) + 2, sizeof(size_t));
 
-    if (x != ~0)
+    if (x != ~(size_t)0)
         over = ", UPPER BOUND VIOLATED";
 
     fprintf(stderr, "BST MEM DEBUG %s:%zu free(%p) = %zu%s%s\n",

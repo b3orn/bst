@@ -1,5 +1,4 @@
 #include "bst/bst.h"
-#define BST_DEBUG_MEMORY
 #include "bst/debug.h"
 
 
@@ -11,6 +10,27 @@ bst_str_new(size_t length, const char *buffer) {
 
     if (!bst_str_init(self, length, buffer)) {
         free(self);
+
+        return NULL;
+    }
+
+    return self;
+}
+
+
+BST_API(bst_str_t*)
+bst_str_init(bst_str_t *self, size_t length, const char *buffer) {
+    if (!self)
+        return NULL;
+
+    if (buffer && !length)
+        length = strlen(buffer);
+
+    if (!bst_lst_init(self, length + 1, 1, NULL))
+        return NULL;
+
+    if (buffer && bst_str_write(self, 0, length, buffer) != length) {
+        bst_str_deinit(self);
 
         return NULL;
     }
@@ -37,6 +57,7 @@ bst_str_from_path(const char *path) {
 BST_API(bst_str_t*)
 bst_str_from_file(FILE *file, size_t length) {
     bst_str_t *self;
+    char c;
     long offset, size;
     if (!file || (offset = ftell(file)) == -1)
         return NULL;
@@ -56,31 +77,19 @@ bst_str_from_file(FILE *file, size_t length) {
         return NULL;
 
     /* fgets reads one less than the provided length and writes null byte */
-    if (!fgets(bst_str_ptr(self, 0), (int)(length + 1), file)) {
+    if (fread(bst_str_ptr(self, 0), 1, length, file) != length) {
         bst_str_free(self);
 
         return NULL;
     }
 
-    return self;
-}
+    c = 0;
+    self->length = length;
 
+    if (!bst_arr_insert(&self->elements, self->length, 1, &c)) {
+        bst_str_free(self);
 
-BST_API(bst_str_t*)
-bst_str_init(bst_str_t *self, size_t length, const char *buffer) {
-    if (!self)
-        return NULL;
-
-    if (buffer && !length)
-        length = strlen(buffer);
-
-    if (!bst_lst_init(self, 1, length + 1, NULL))
-        return NULL;
-
-    if (buffer && bst_str_write(self, 0, length, buffer) != length) {
-        bst_str_deinit(self);
-
-        return NULL;
+        return 0;
     }
 
     return self;
@@ -125,10 +134,10 @@ bst_str_clear(bst_str_t *self) {
 
 BST_API(char*)
 bst_str_ptr(bst_str_t *self, size_t offset) {
-    if (!self || offset >= self->length)
+    if (!self || (offset && offset >= self->length))
         return NULL;
 
-    return (char*)bst_lst_get(self, offset);
+    return (char*)bst_arr_ptr(&self->elements, offset);
 }
 
 
@@ -153,15 +162,11 @@ bst_str_write(bst_str_t *self,
     if (!length)
         length = strlen(buffer);
 
+    c = 0;
     length = bst_arr_insert(&self->elements,
                             self->length,
                             length,
                             &buffer[offset]);
-    if (!length) {
-        return 0;
-    }
-
-    c = 0;
     self->length += length;
 
     if (!bst_arr_insert(&self->elements, self->length, 1, &c))

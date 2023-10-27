@@ -3,6 +3,8 @@
  *
  * dynamic list
  *
+ * - based on bst_arr_t from bst/arr.h
+ * - copies elements
  */
 
 #ifndef BST_LST_H
@@ -19,12 +21,12 @@ typedef struct bst_lst {
 
 
 BST_API(bst_lst_t*)
-bst_lst_new(size_t item_size, size_t length, bst_lst_free_func_t free_func);
+bst_lst_new(size_t capacity, size_t item_size, bst_lst_free_func_t free_func);
 
 BST_API(bst_lst_t*)
 bst_lst_init(bst_lst_t *self,
+             size_t capacity,
              size_t item_size,
-             size_t length,
              bst_lst_free_func_t free_func);
 
 BST_API(void)

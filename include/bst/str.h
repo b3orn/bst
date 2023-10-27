@@ -16,13 +16,13 @@ BST_API(bst_str_t*)
 bst_str_new(size_t length, const char *buffer);
 
 BST_API(bst_str_t*)
+bst_str_init(bst_str_t *self, size_t length, const char *buffer);
+
+BST_API(bst_str_t*)
 bst_str_from_path(const char *path);
 
 BST_API(bst_str_t*)
 bst_str_from_file(FILE *file, size_t length);
-
-BST_API(bst_str_t*)
-bst_str_init(bst_str_t *self, size_t length, const char *buffer);
 
 BST_API(void)
 bst_str_deinit(bst_str_t *self);

@@ -1,15 +1,14 @@
 #include "bst/bst.h"
-#define BST_DEBUG_MEMORY
 #include "bst/debug.h"
 
 
 BST_API(bst_lst_t*)
-bst_lst_new(size_t item_size, size_t length, bst_lst_free_func_t free_func) {
+bst_lst_new(size_t capacity, size_t item_size, bst_lst_free_func_t free_func) {
     bst_lst_t *self;
     if (!(self = malloc(sizeof(*self))))
         return NULL;
 
-    if (!bst_lst_init(self, item_size, length, free_func)) {
+    if (!bst_lst_init(self, capacity, item_size, free_func)) {
         free(self);
 
         return NULL;
@@ -21,10 +20,10 @@ bst_lst_new(size_t item_size, size_t length, bst_lst_free_func_t free_func) {
 
 BST_API(bst_lst_t*)
 bst_lst_init(bst_lst_t *self,
+             size_t capacity,
              size_t item_size,
-             size_t length,
              bst_lst_free_func_t free_func) {
-    if (!self || !bst_arr_init(&self->elements, item_size, length))
+    if (!self || !bst_arr_init(&self->elements, capacity, item_size))
         return NULL;
 
     self->free_func = free_func;
@@ -94,10 +93,10 @@ bst_lst_insert(bst_lst_t *self, size_t index, void *item) {
 
 BST_API(void*)
 bst_lst_get(bst_lst_t *self, size_t index) {
-    if (!self)
+    if (!self || index >= self->length)
         return NULL;
 
-    return bst_arr_get(&self->elements, index);
+    return bst_arr_ptr(&self->elements, index);
 }
 
 
@@ -109,18 +108,15 @@ bst_lst_remove(bst_lst_t *self, size_t index) {
     if (self->free_func)
         self->free_func(bst_lst_get(self, index));
 
-    if (index == self->length - 1) {
-        bst_arr_remove(&self->elements, index);
-
-        --self->length;
-
-        return;
+    if (index < self->length - 1) {
+        /* copy elements to overwrite gap */
+        bst_arr_insert(&self->elements,
+                       index,
+                       self->length - index - 1,
+                       bst_arr_ptr(&self->elements, index + 1));
     }
 
-    bst_arr_insert(&self->elements,
-                   index,
-                   self->length - index - 1,
-                   bst_arr_ptr(&self->elements, index + 1));
+    /* remove last element */
     bst_arr_remove(&self->elements, self->length - 1);
 
     --self->length;
