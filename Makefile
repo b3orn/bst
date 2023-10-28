@@ -67,11 +67,15 @@ obj_files := $(patsubst $(src_dir)/%.c,$(out_dir)/%.o,$(src_files))
 test_src_files := $(wildcard $(tests_dir)/*.c)
 test_bin_files := $(patsubst $(tests_dir)/%.c,$(out_dir)/tests/%,$(test_src_files))
 
-shared_target := $(out_dir)/lib/lib$(target).$(LIB_EXT)
-static_target := $(out_dir)/lib/lib$(target).a
+ifndef shared_target
+	shared_target := $(out_dir)/lib/lib$(target).$(LIB_EXT)
+endif
+ifndef static_target
+	static_target := $(out_dir)/lib/lib$(target).a
+endif
 
 
-.PHONY: all clean
+.PHONY: all tests clean
 
 all: $(shared_target) $(static_target)
 
